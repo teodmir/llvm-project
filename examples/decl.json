@@ -1,0 +1,26 @@
+{
+    "functions": {
+        "foo": {
+            "params": { "int *": 2 },
+            "return": "void"
+        },
+        "bar": {
+            "return": "float",
+            "params": { "char": 2, "int *": 1 }
+        },
+        "missing_function" : {
+            "return": "void",
+            "params": {}
+        },
+        "wrong": {
+            "return": "void",
+            "params": { "int": 2 , "char": 1 }
+        }
+    },
+    "structs": {
+        "baz": { "int": 1 },
+        "qux": { "char": 1, "float": 2 },
+        "wrong": { "float": 1 },
+        "missing_struct": {}
+    }
+}

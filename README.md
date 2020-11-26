@@ -1,110 +1,108 @@
-# The LLVM Compiler Infrastructure
+# LLVM fork with extras for assignment checking
+Fork of LLVM (https://releases.llvm.org/download.html) with additional
+modules for Clang-tidy and the Clang Static Analyzer, mainly for use
+in automated checking of student assignments written in the C
+language.
 
-This directory and its sub-directories contain source code for LLVM,
-a toolkit for the construction of highly optimized compilers,
-optimizers, and run-time environments.
+## Building
+Follow the instructions at https://clang.llvm.org/get_started.html,
+but ensure cmake is run with
+`-DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra"` (instead of just
+clang as shown on the page) to enable Clang-tidy. It is also
+recommended to set the build type to release instead of the default
+(debug), since debug takes longer and requires more space; this is
+enabled with -DCMAKE\_BUILD\_TYPE=RELEASE. To summarize, the CMake
+command should look like (on Unix-likes):
 
-The README briefly describes how to get started with building LLVM.
-For more information on how to contribute to the LLVM project, please
-take a look at the
-[Contributing to LLVM](https://llvm.org/docs/Contributing.html) guide.
+    cmake -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" -DCMAKE_BUILD_TYPE=RELEASE -G "Unix Makefiles" ../llvm
 
-## Getting Started with the LLVM System
+and with Visual Studio:
 
-Taken from https://llvm.org/docs/GettingStarted.html.
+    cmake -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" -DCMAKE_BUILD_TYPE=RELEASE -G "Visual Studio 15 2017" -A x64 -Thost=x64 ..\llvm
 
-### Overview
+When running the actual compilation commands after cmake, you should
+enable parallel building (`make -j n`, on Unix-likes, where *n* should
+be the number of cores available on your CPU; for Visual Studio,
+enable "Multi-processor Compilation" found in the project compiler
+options).
 
-Welcome to the LLVM project!
+Ignore the part about adding the binary directory to your executable
+path (unless you actually want to use this fork as your default LLVM
+installation).
 
-The LLVM project has multiple components. The core of the project is
-itself called "LLVM". This contains all of the tools, libraries, and header
-files needed to process intermediate representations and converts it into
-object files.  Tools include an assembler, disassembler, bitcode analyzer, and
-bitcode optimizer.  It also contains basic regression tests.
+## Running
+You can run the program manually from the build directory (inside the
+bin/ subdirectory), but the python script run-analyzer.py is provided
+to make it easier, since it provides preconfigured settings in
+addition to making it easier to switch between different
+assignment-specific declarations (see per-assignment declaration
+checking below). You can try the example JSON file by running
+(assuming your current working directory is examples/):
 
-C-like languages use the [Clang](http://clang.llvm.org/) front end.  This
-component compiles C, C++, Objective-C, and Objective-C++ code into LLVM bitcode
--- and from there into object files, using LLVM.
+    $ ../run-analyzer.py -d decl.json decl-test.c
 
-Other components include:
-the [libc++ C++ standard library](https://libcxx.llvm.org),
-the [LLD linker](https://lld.llvm.org), and more.
+### Options
 
-### Getting the Source Code and Building LLVM
+    -h           Display help message
+    -c           Use the local Clang compilation database
+    -d <file>    JSON file for declarations (see file format
+    -t <file>    Location of Clang-tidy executable
+                 (assumed to be in the build directory
+                 based on the script location being at
+                 the root of the directory)
 
-The LLVM Getting Started documentation may be out of date.  The [Clang
-Getting Started](http://clang.llvm.org/get_started.html) page might have more
-accurate information.
+## Additions
+- misc-assignment-main-nocpp: ensure that C++ features are not used,
+  which is not always obvious on MSVC.
 
-This is an example work-flow and configuration to get and build the LLVM source:
+- misc-assignment-globals: warn against any variables with global
+  storage duration, including both variable with global scope as well as
+  static variables. Differs from the built-in global variable checker in
+  that const-qualified variables are included as well.
 
-1. Checkout LLVM (including related sub-projects like Clang):
+- misc-assignment-goto: warn against usages of the GOTO statement. Differs
+  from the built-in checker in that forward-jumping or nested loops are
+  not excluded.
 
-     * ``git clone https://github.com/llvm/llvm-project.git``
+- misc-assignment-decl-exist: assignment-specific checker that can be
+  used to ensure function and struct declarations exist that match a
+  certain signature, assuming that their name is known in advance. Uses
+  a JSON file of declarations for configuration (see per-assignment
+  declaration checking below).
 
-     * Or, on windows, ``git clone --config core.autocrlf=false
-    https://github.com/llvm/llvm-project.git``
+- nullability.MallocNull: Clang Static Analyzer check that verifies
+  that the return value of memory allocation functions is explicitly
+  checked for NULL. Complements the built-in nullability check (that
+  catches explicit NULL dereferencing) to ensure that dereferencing a
+  pointer is only done when that pointer is guaranteed to not be NULL.
 
-2. Configure and build LLVM and Clang:
+## Per-assignment declaration checking
+Declarations are provided through a JSON file using Clang-tidy options
+(see "Configuring Checks" in
+https://clang.llvm.org/extra/clang-tidy/Contributing.html). It is
+possible to pass these options either in a .clang-tidy file or through
+a command line argument (through the key
+misc-assignment-decl-exist.DeclFile), but the wrapper run-analyzer.py
+provides the -d option to do this in a more concise way without having
+to use YAML.
 
-     * ``cd llvm-project``
+### JSON format
+examples/decl.json provides an example configuration file that should
+serve as a template for most use cases and is the fastest way to get
+started. Declarations are represented as a map from their identifiers
+to the actual function/struct declaration. Functions are represented
+by a map of strings (type names) to integers (the amount of times they
+should occur) and a return type. Structs use the same representation
+as function parameters. Note that the keys "functions" and "structs"
+can be omitted completely if there are no declarations to check for.
 
-     * ``mkdir build``
+Internally, the types use LLVM's string representation to compare them
+with the keys in the JSON object, which means that pointer types have
+to be written with exactly one space between the asterisk and the type
+name (i.e. write "int \*", not "int\*"). Additionally, array types are
+simply written as pointers as well, i.e. the parameter int foo[] is
+represented as "int *".
 
-     * ``cd build``
-
-     * ``cmake -G <generator> [options] ../llvm``
-
-        Some common build system generators are:
-
-        * ``Ninja`` --- for generating [Ninja](https://ninja-build.org)
-          build files. Most llvm developers use Ninja.
-        * ``Unix Makefiles`` --- for generating make-compatible parallel makefiles.
-        * ``Visual Studio`` --- for generating Visual Studio projects and
-          solutions.
-        * ``Xcode`` --- for generating Xcode projects.
-
-        Some Common options:
-
-        * ``-DLLVM_ENABLE_PROJECTS='...'`` --- semicolon-separated list of the LLVM
-          sub-projects you'd like to additionally build. Can include any of: clang,
-          clang-tools-extra, libcxx, libcxxabi, libunwind, lldb, compiler-rt, lld,
-          polly, or debuginfo-tests.
-
-          For example, to build LLVM, Clang, libcxx, and libcxxabi, use
-          ``-DLLVM_ENABLE_PROJECTS="clang;libcxx;libcxxabi"``.
-
-        * ``-DCMAKE_INSTALL_PREFIX=directory`` --- Specify for *directory* the full
-          path name of where you want the LLVM tools and libraries to be installed
-          (default ``/usr/local``).
-
-        * ``-DCMAKE_BUILD_TYPE=type`` --- Valid options for *type* are Debug,
-          Release, RelWithDebInfo, and MinSizeRel. Default is Debug.
-
-        * ``-DLLVM_ENABLE_ASSERTIONS=On`` --- Compile with assertion checks enabled
-          (default is Yes for Debug builds, No for all other build types).
-
-      * ``cmake --build . [-- [options] <target>]`` or your build system specified above
-        directly.
-
-        * The default target (i.e. ``ninja`` or ``make``) will build all of LLVM.
-
-        * The ``check-all`` target (i.e. ``ninja check-all``) will run the
-          regression tests to ensure everything is in working order.
-
-        * CMake will generate targets for each tool and library, and most
-          LLVM sub-projects generate their own ``check-<project>`` target.
-
-        * Running a serial build will be **slow**.  To improve speed, try running a
-          parallel build.  That's done by default in Ninja; for ``make``, use the option
-          ``-j NNN``, where ``NNN`` is the number of parallel jobs, e.g. the number of
-          CPUs you have.
-
-      * For more information see [CMake](https://llvm.org/docs/CMake.html)
-
-Consult the
-[Getting Started with LLVM](https://llvm.org/docs/GettingStarted.html#getting-started-with-llvm)
-page for detailed information on configuring and compiling LLVM. You can visit
-[Directory Layout](https://llvm.org/docs/GettingStarted.html#directory-layout)
-to learn about the layout of the source code tree.
+No semantic control is done on the JSON declarations; negative
+integers and strings representing invalid C identifiers are allowed
+(but will not match anything in the source file, for obvious reasons).

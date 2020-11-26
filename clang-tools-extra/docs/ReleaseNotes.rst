@@ -124,6 +124,26 @@ New checks
   Alias to the :doc:`bugprone-signal-handler
   <clang-tidy/checks/bugprone-signal-handler>` check.
 
+- New :doc:`misc-assignment-decl-exist
+  <clang-tidy/checks/misc-assignment-decl-exist>` check.
+
+  FIXME: add release notes.
+
+- New :doc:`misc-assignment-globals
+  <clang-tidy/checks/misc-assignment-globals>` check.
+
+  FIXME: add release notes.
+
+- New :doc:`misc-assignment-goto
+  <clang-tidy/checks/misc-assignment-goto>` check.
+
+  FIXME: add release notes.
+
+- New :doc:`misc-assignment-no-cpp
+  <clang-tidy/checks/misc-assignment-no-cpp>` check.
+
+  FIXME: add release notes.
+
 - New :doc:`readability-function-cognitive-complexity
   <clang-tidy/checks/readability-function-cognitive-complexity>` check.
 

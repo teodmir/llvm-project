@@ -339,6 +339,10 @@ def NullableReturnedFromNonnullChecker : Checker<"NullableReturnedFromNonnull">,
   Dependencies<[NullabilityBase]>,
   Documentation<NotDocumented>;
 
+def MallocNullChecker : Checker<"MallocNull">,
+  HelpText<"Ensure malloc return values are checked for NULL" >,
+  Documentation<NotDocumented>;
+
 } // end "nullability"
 
 //===----------------------------------------------------------------------===//

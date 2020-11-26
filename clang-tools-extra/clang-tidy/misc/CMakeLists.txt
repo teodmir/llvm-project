@@ -4,6 +4,10 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_clang_library(clangTidyMiscModule
+  AssignmentDeclExistCheck.cpp
+  AssignmentGlobalsCheck.cpp
+  AssignmentGotoCheck.cpp
+  AssignmentNoCppCheck.cpp
   DefinitionsInHeadersCheck.cpp
   MiscTidyModule.cpp
   MisplacedConstCheck.cpp

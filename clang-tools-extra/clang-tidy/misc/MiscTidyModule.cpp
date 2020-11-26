@@ -9,6 +9,10 @@
 #include "../ClangTidy.h"
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
+#include "AssignmentDeclExistCheck.h"
+#include "AssignmentGlobalsCheck.h"
+#include "AssignmentGotoCheck.h"
+#include "AssignmentNoCppCheck.h"
 #include "DefinitionsInHeadersCheck.h"
 #include "MisplacedConstCheck.h"
 #include "NewDeleteOverloadsCheck.h"
@@ -31,6 +35,14 @@ namespace misc {
 class MiscModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
+    CheckFactories.registerCheck<AssignmentDeclExistCheck>(
+        "misc-assignment-decl-exist");
+    CheckFactories.registerCheck<AssignmentGlobalsCheck>(
+        "misc-assignment-globals");
+    CheckFactories.registerCheck<AssignmentGotoCheck>(
+        "misc-assignment-goto");
+    CheckFactories.registerCheck<AssignmentNoCppCheck>(
+        "misc-assignment-no-cpp");
     CheckFactories.registerCheck<DefinitionsInHeadersCheck>(
         "misc-definitions-in-headers");
     CheckFactories.registerCheck<MisplacedConstCheck>("misc-misplaced-const");
