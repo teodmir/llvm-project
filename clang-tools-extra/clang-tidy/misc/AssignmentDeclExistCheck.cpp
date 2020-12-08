@@ -9,6 +9,7 @@
 
 #include <sstream>
 #include <map>
+#include <vector>
 #include "AssignmentDeclExistCheck.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
@@ -28,27 +29,50 @@ typedef std::map<std::string, int> ParamMap;
 struct FuncDecl {
   ParamMap pMap;
   std::string retType;
+
+public:
+  FuncDecl() {}
+  FuncDecl(const ParamMap &p, const std::string &ret) : pMap(p), retType(ret) {}
+
+  bool operator ==(const FuncDecl &rhs) const {
+    return pMap == rhs.pMap && retType == rhs.retType;
+  }
+
+  bool operator !=(const FuncDecl &rhs) const {
+      return !operator ==(rhs);
+  }
+
+  std::string pretty() const {
+    std::stringstream ss;
+    ss << "(";
+    for (auto it = pMap.begin(); it != pMap.end(); ++it) {
+      ss << it->first << ": " << it->second;
+      if (!(std::next(it) == pMap.end()))
+        ss << ", ";
+    }
+    ss << ") -> " << retType;
+    return ss.str();
+  }
 };
+
+std::string prettyMapAsStruct(const ParamMap &pMap) {
+    std::stringstream ss;
+    ss << "{ ";
+    for (auto it = pMap.begin(); it != pMap.end(); ++it) {
+      ss << it->first << ": " << it->second << "; ";
+    }
+    ss << "};";
+    return ss.str();
+}
 
 struct Declarations {
     std::map<std::string, FuncDecl> functions;
     std::map<std::string, ParamMap> structs;
+    std::vector<FuncDecl> unnamedFunctions;
+    std::vector<ParamMap> unnamedStructs;
 };
 
 Declarations decls;
-
-std::string paramString(const ParamMap &pMap) {
-    std::stringstream ss;
-    if (pMap.empty())
-        return "no args";
-
-    for (auto it = pMap.begin(); it != pMap.end(); ++it) {
-      ss << it->second << " " << it->first << "(s)";
-      if (!(std::next(it) == pMap.end()))
-          ss << ", ";
-    }
-    return ss.str();
-}
 
 // Taken from: /llvm/lib/Analysis/DevelopmentModeInlineAdvisor.cpp (line 495)
 llvm::json::Value readJsonFile(StringRef FileName) {
@@ -102,16 +126,45 @@ bool fromJSON(const llvm::json::Value &E, Declarations &out,
   }
   auto funcs = jsonObj->get("functions");
   auto structs = jsonObj->get("structs");
+  auto unnamedFuncs = jsonObj->get("functions*");
+  auto unnamedStructs = jsonObj->get("structs*");
   // The absence of functions/structs is allowed.
   if (funcs && !fromJSON(*funcs, out.functions, P))
     return false;
   if (structs && !fromJSON(*structs, out.structs, P))
     return false;
+  if (unnamedFuncs && !fromJSON(*unnamedFuncs, out.unnamedFunctions, P))
+      return false;
+  if (unnamedStructs && !fromJSON(*unnamedStructs, out.unnamedStructs, P))
+      return false;
 
   return true;
 }
 
-// TODO: read json file location from options
+// Check if any anonymous declarations overlaps with any named declarations.
+void checkOverlappingDefinitions() {
+  std::vector<FuncDecl> funcs;
+  for (const auto &it : decls.functions)
+    funcs.push_back(it.second);
+  std::vector<ParamMap> structs;
+  for (const auto &it : decls.structs)
+      structs.push_back(it.second);
+
+  for (const auto &it : decls.unnamedFunctions)
+    if (std::count(funcs.begin(), funcs.end(), it)) {
+      llvm::errs() << "Unnamed function declaration " << it.pretty()
+                   << " has a named counterpart\n";
+      exit(EXIT_FAILURE);
+    }
+
+  for (const auto &it : decls.unnamedStructs)
+    if (std::count(structs.begin(), structs.end(), it)) {
+      llvm::errs() << "Unnamed struct declaration " << prettyMapAsStruct(it)
+                   << " has a named counterpart\n";
+      exit(EXIT_FAILURE);
+    }
+}
+
 void AssignmentDeclExistCheck::registerMatchers(MatchFinder *Finder) {
   if (DeclFile.empty())
       return;
@@ -121,10 +174,11 @@ void AssignmentDeclExistCheck::registerMatchers(MatchFinder *Finder) {
   if (!fromJSON(json, decls, llvm::json::Path(root))) {
     llvm::errs() << "Declarations: " << root.getError() << "\n";
     return;
-    }
-    Finder->addMatcher(functionDecl().bind("fun"), this);
-    Finder->addMatcher(recordDecl().bind("struct"), this);
-    Finder->addMatcher(typedefDecl().bind("typedefStruct"), this);
+  }
+  checkOverlappingDefinitions();
+  Finder->addMatcher(functionDecl().bind("fun"), this);
+  Finder->addMatcher(recordDecl().bind("struct"), this);
+  Finder->addMatcher(typedefDecl().bind("typedefStruct"), this);
 }
 
 // Given an iterator range of comparable elements, return a map from
@@ -141,14 +195,24 @@ countOccurrences(Iter begin, Iter end)
 
 void AssignmentDeclExistCheck::onEndOfTranslationUnit() {
   if (!decls.functions.empty()) {
-    llvm::errs() << "MISSING FUNCTION(s):\n";
+    llvm::errs() << "MISSING NAMED FUNCTION(s):\n";
     for (const auto &it : decls.functions)
       llvm::errs() << it.first << "\n";
   }
   if (!decls.structs.empty()) {
-    llvm::errs() << "MISSING STRUCT(s):\n";
+    llvm::errs() << "MISSING NAMED STRUCT(s):\n";
     for (const auto &it : decls.structs)
       llvm::errs() << it.first << "\n";
+  }
+  if (!decls.unnamedFunctions.empty()) {
+    llvm::errs() << "MISSING UNNAMED FUNCTION(s):\n";
+    for (const auto &it : decls.unnamedFunctions)
+      llvm::errs() << it.pretty() << "\n";
+  }
+  if (!decls.unnamedStructs.empty()) {
+    llvm::errs() << "MISSING UNNAMED STRUCT(s):\n";
+    for (const auto &it : decls.unnamedStructs)
+      llvm::errs() << prettyMapAsStruct(it) << "\n";
   }
 }
 
@@ -165,31 +229,30 @@ std::string cleanTypeString(QualType t) {
 
 void AssignmentDeclExistCheck::checkFun(const FunctionDecl &decl) {
   auto name = decl.getNameAsString();
-  auto it = decls.functions.find(name);
 
-  if (it == decls.functions.end())
-    return;
-
-  // Do the return type checking first, and continue with the
-  // parameter list if necessary.
-  auto retType = cleanTypeString(decl.getReturnType());
-  auto info = it->second;
-  auto expectedRet = info.retType;
-  if (retType != expectedRet) {
-    diag(decl.getLocation(),
-         "Return value of '%0' should be of type '%1', but is of type '%2'")
-        << name << expectedRet << retType;
-    decls.functions.erase(it);
-    return;
-  }
   std::vector<std::string> typeStrings;
   for (const auto &it : decl.parameters())
       typeStrings.push_back(cleanTypeString(it->getType()));
-  if (info.pMap != countOccurrences(typeStrings.begin(), typeStrings.end()))
-      diag(decl.getLocation(),
-           "Wrong parameters of '%0': should consist of %1")
-          << name << paramString(info.pMap);
-  decls.functions.erase(it);
+
+  auto retType = cleanTypeString(decl.getReturnType());
+  auto currentFunc = FuncDecl(countOccurrences(typeStrings.begin(),
+                                               typeStrings.end()),
+                              retType);
+  auto it = decls.functions.find(name);
+  if (it == decls.functions.end()) {
+      // Name not found among named declarations; check the unnamed
+      // declarations vector.
+    auto foundUnnamed = std::find(decls.unnamedFunctions.begin(),
+                                  decls.unnamedFunctions.end(), currentFunc);
+    if (foundUnnamed != decls.unnamedFunctions.end())
+        decls.unnamedFunctions.erase(foundUnnamed);
+  } else {
+      // Name match; ensure the signature matches.
+      if (currentFunc != it->second)
+          diag(decl.getLocation(), "Expected %0 but got %1")
+              << it->second.pretty() << currentFunc.pretty();
+      decls.functions.erase(it);
+  }
 }
 
 // Optional name parameter is for typedefs, since they should be
@@ -198,18 +261,23 @@ void AssignmentDeclExistCheck::checkFun(const FunctionDecl &decl) {
 void AssignmentDeclExistCheck::checkStruct(const RecordDecl &decl,
                                            const std::string *n) {
   auto name = n ? *n : decl.getNameAsString();
-  auto it = decls.structs.find(name);
-  if (it == decls.structs.end())
-    return;
-
-  auto pMap = it->second;
   std::vector<std::string> typeStrings;
   for (const auto &it : decl.fields())
     typeStrings.push_back(cleanTypeString(it->getType()));
-  if (pMap != countOccurrences(typeStrings.begin(), typeStrings.end()))
-    diag(decl.getLocation(), "Wrong members of '%0': should consist of %1")
-        << name << paramString(pMap);
-  decls.structs.erase(it);
+  auto currentStruct = countOccurrences(typeStrings.begin(), typeStrings.end());
+  auto it = decls.structs.find(name);
+  if (it == decls.structs.end()) {
+    auto foundUnnamed = std::find(decls.unnamedStructs.begin(),
+                                  decls.unnamedStructs.end(), currentStruct);
+    if (foundUnnamed != decls.unnamedStructs.end())
+        decls.unnamedStructs.erase(foundUnnamed);
+  } else {
+    auto pMap = it->second;
+    if (pMap != currentStruct)
+      diag(decl.getLocation(), "Wrong members of '%0': should consist of %1")
+          << name << prettyMapAsStruct(pMap);
+    decls.structs.erase(it);
+  }
 }
 
 void AssignmentDeclExistCheck::checkTypedef(const TypedefDecl &decl) {

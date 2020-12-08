@@ -7,6 +7,8 @@ float bar(char c1, char c2, int* y) { return 0.5; }
 
 void wrong() {}
 
+int unnamed_test(char c, int x) { return 0; }
+
 struct baz {
     int x;
 };
@@ -21,17 +23,12 @@ struct wrong {
     int x;
 };
 
-int global;
+struct unnamed_test {
+    float x;
+    float y;
+}
 
 int main(void)
 {
-    static int static_int;
-    int *p = malloc(1000 * sizeof(int));
-    p[1];
-    free(p);
-
-    goto L;
-
-L:
     return 0;
 }

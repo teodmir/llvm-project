@@ -22,5 +22,20 @@
         "qux": { "char": 1, "float": 2 },
         "wrong": { "float": 1 },
         "missing_struct": {}
-    }
+    },
+    "functions*": [
+        {
+            "return": "int",
+            "params": { "char": 1, "int": 1 }
+        },
+        {
+            "return": "float",
+            "params": {}
+        }
+    ],
+    "structs*": [
+        { "float": 2 },
+        { "int": 2 }
+    ]
+
 }
