@@ -1,0 +1,13 @@
+{
+    "functions": {
+        "foo": {
+            "params": { "%test": 2 },
+            "return": "void"
+        }
+    },
+    "%structs": {
+        "test": { "float": 2 },
+        "test2": { "%test": 2 }
+    }
+
+}
